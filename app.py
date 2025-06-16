@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from dosage_calculator import DosageCalculator
-from translations get_translation, LANGUAGES
+from translations import get_translation, LANGUAGES
 
 # Page configuration
 st.set_page_config(
