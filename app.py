@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from dosage_calculator import DosageCalculator
-from translations import get_translation, LANGUAGES
+from translations get_translation, LANGUAGES
 
 # Page configuration
 st.set_page_config(
@@ -178,65 +178,78 @@ def display_medication_category(category_key, medications):
         st.markdown("---")
 
 def display_infusion_medications(medications):
-    """Display infusion medications with rate selection"""
+    """Display infusion medications with rate selection and additional dosage info"""
     import re
     
     for i, med in enumerate(medications):
         with st.container():
             col1, col2, col3 = st.columns([2, 2, 2])
-            
+
+            # Medication name and base dosage info
             with col1:
                 st.write(f"**{med['name']}**")
                 st.caption(f"Weight: {med['dosage']}")
-            
+
             with col2:
-                if 'infusion' in med['route'].lower() or any(unit in med['route'] for unit in ['mcg/kg/min', 'mg/kg/h', 'units/kg/h']):
-                    match = re.search(r'(\d+\.?\d*)-(\d+\.?\d*)', med['route'])
-                    if match:
-                        min_dose = float(match.group(1))
-                        max_dose = float(match.group(2))
-                        
-                        if max_dose < 1:
-                            step = 0.01
-                            options = [round(min_dose + i * step, 2) for i in range(int((max_dose - min_dose) / step) + 1)]
-                        elif max_dose < 10:
-                            step = 0.1
-                            options = [round(min_dose + i * step, 1) for i in range(int((max_dose - min_dose) / step) + 1)]
-                        else:
-                            step = 1.0
-                            options = [int(min_dose + i * step) for i in range(int((max_dose - min_dose) / step) + 1)]
-                        
-                        if len(options) > 20:
-                            options = options[::len(options)//15]
-                        
-                        selected_dose = st.selectbox(
-                            "Select rate:",
-                            options=options,
-                            index=len(options)//2,
-                            key=f"dose_{i}_{med['name']}"
-                        )
-                        
-                        unit_match = re.search(r'(mcg/kg/min|mg/kg/h|units/kg/h)', med['route'])
-                        unit = unit_match.group(1) if unit_match else "units"
-                        
-                        with col3:
-                            weight_kg = float(med['dosage'].split()[0])
-                            
-                            if 'mcg/kg/min' in unit:
-                                actual_dose = selected_dose * weight_kg
-                                st.metric("Actual Dose", f"{actual_dose:.1f} mcg/min")
-                            elif 'mg/kg/h' in unit:
-                                actual_dose = selected_dose * weight_kg
-                                st.metric("Actual Dose", f"{actual_dose:.1f} mg/h")
-                            elif 'units/kg/h' in unit:
-                                actual_dose = selected_dose * weight_kg
-                                st.metric("Actual Dose", f"{actual_dose:.2f} units/h")
-                            else:
-                                st.metric("Selected Rate", f"{selected_dose} {unit}")
+                route = med['route']
+                match = re.search(r'(\d+\.?\d*)-(\d+\.?\d*)', route)
+                unit_match = re.search(r'(mcg/kg/min|mg/kg/h|units/kg/h)', route)
+
+                if match and unit_match:
+                    min_dose = float(match.group(1))
+                    max_dose = float(match.group(2))
+                    unit = unit_match.group(1)
+
+                    # Create dose options
+                    if max_dose < 1:
+                        step = 0.01
+                        options = [round(min_dose + i * step, 2) for i in range(int((max_dose - min_dose) / step) + 1)]
+                    elif max_dose < 10:
+                        step = 0.1
+                        options = [round(min_dose + i * step, 1) for i in range(int((max_dose - min_dose) / step) + 1)]
                     else:
-                        st.write(med['route'])
+                        step = 1.0
+                        options = [int(min_dose + i * step) for i in range(int((max_dose - min_dose) / step) + 1)]
+
+                    if len(options) > 20:
+                        options = options[::len(options)//15]
+
+                    # Show dosage range
+                    st.write(f"Range: {options[0]} – {options[-1]} {unit}")
+
+                    selected_dose = st.selectbox(
+                        "Select rate:",
+                        options=options,
+                        index=len(options)//2,
+                        key=f"dose_{i}_{med['name']}"
+                    )
+
+                    with col3:
+                        weight_kg = float(med['dosage'].split()[0])
+                        total_dose = selected_dose * weight_kg  # Total per min or hour depending on unit
+
+                        # Convert to ml/h assuming total volume is 50 mL
+                        if 'mcg/kg/min' in unit:
+                            # Convert mcg/min → total mcg/h → mg/h
+                            dose_per_hour_mcg = total_dose * 60
+                            dose_per_hour_mg = dose_per_hour_mcg / 1000
+                        elif 'mg/kg/h' in unit:
+                            dose_per_hour_mg = total_dose
+                        elif 'units/kg/h' in unit:
+                            dose_per_hour_mg = total_dose  # For units just treat it as units
+                        else:
+                            dose_per_hour_mg = None
+
+                        if dose_per_hour_mg is not None:
+                            ml_per_hour = 50  # Assume drug is in 50 ml NS
+                            concentration = dose_per_hour_mg / 50  # mg per ml
+                            st.metric("Infusion Rate", f"{ml_per_hour:.1f} mL/h")
+                            st.caption(f"Add **{dose_per_hour_mg:.2f} mg** to 50 mL NS")
+                        else:
+                            st.write("Unsupported unit")
                 else:
-                    st.write(med['route'])
+                    st.write(route)
+
 
 # Run the app
 if __name__ == "__main__":
