@@ -62,35 +62,37 @@ def main():
             )
 
     with col2:
-        # Age input first, then age unit
-        age_col1, age_col2 = st.columns([2, 1])
-        with age_col1:
-            if st.session_state.get("age_unit_selector", "years") == 'years':
-                age = st.number_input(
-                    get_translation("age", st.session_state.language),
-                    min_value=0,
-                    max_value=120,
-                    value=30,
-                    step=1,
-                    key="age_input"
-                )
-            else:
-                age = st.number_input(
-                    get_translation("age", st.session_state.language),
-                    min_value=0,
-                    max_value=1440,  # 120 years * 12 months
-                    value=360,       # 30 years * 12 months
-                    step=1,
-                    key="age_input"
-                )
+    # Age input first, then age unit
+    age_col1, age_col2 = st.columns([2, 1])
 
-        with age_col2:
-            age_unit = st.selectbox(
-                get_translation("age_unit", st.session_state.language),
-                options=['years', 'months'],
-                index=0 if st.session_state.get("age_unit_selector", "years") == 'years' else 1,
-                key="age_unit_selector"
+    with age_col1:
+        if st.session_state.get("age_unit_selector", "years") == 'years':
+            age = st.number_input(
+                label=get_translation("age", st.session_state.language),
+                min_value=0,
+                max_value=120,
+                value=30,
+                step=1,
+                key="age_input"
             )
+        else:
+            age = st.number_input(
+                label=get_translation("age", st.session_state.language),
+                min_value=0,
+                max_value=1440,
+                value=360,
+                step=1,
+                key="age_input"
+            )
+
+    with age_col2:
+        age_unit = st.selectbox(
+            label="",  # no label to keep it visually smaller
+            options=['years', 'months'],
+            index=0 if st.session_state.get("age_unit_selector", "years") == 'years' else 1,
+            key="age_unit_selector"
+        )
+
 
     with col3:
         st.write("")  # Spacer
