@@ -17,11 +17,11 @@ if 'language' not in st.session_state:
 def main():
     # Language selector in top-right corner
     col1, col2 = st.columns([4, 1])
-    
+
     with col1:
         st.title(get_translation("title", st.session_state.language))
         st.markdown(get_translation("subtitle", st.session_state.language))
-    
+
     with col2:
         st.write("")  # Add some space
         language = st.selectbox(
@@ -33,14 +33,14 @@ def main():
             label_visibility="collapsed",
             disabled=False
         )
-    
+
     if language != st.session_state.language:
         st.session_state.language = language
         st.rerun()
-    
+
     # Input section
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         # Weight and weight unit in same row
         weight_col1, weight_col2 = st.columns([2, 1])
@@ -60,64 +60,66 @@ def main():
                 index=0,
                 key="weight_unit_selector"
             )
-    
+
     with col2:
-        # Age and age unit in same row
+        # Age input first, then age unit
         age_col1, age_col2 = st.columns([2, 1])
         with age_col1:
-            age_unit = st.selectbox(
-                get_translation("age_unit", st.session_state.language),
-                options=['years', 'months'],
-                index=0,
-                key="age_unit_selector"
-            )
-            if age_unit == 'years':
+            if st.session_state.get("age_unit_selector", "years") == 'years':
                 age = st.number_input(
                     get_translation("age", st.session_state.language),
                     min_value=0,
                     max_value=120,
                     value=30,
-                    step=1
+                    step=1,
+                    key="age_input"
                 )
-            else:  # months
+            else:
                 age = st.number_input(
                     get_translation("age", st.session_state.language),
                     min_value=0,
                     max_value=1440,  # 120 years * 12 months
-                    value=360,  # 30 years * 12 months
-                    step=1
+                    value=360,       # 30 years * 12 months
+                    step=1,
+                    key="age_input"
                 )
+
         with age_col2:
-            st.write("")  # Spacer for alignment
-    
+            age_unit = st.selectbox(
+                get_translation("age_unit", st.session_state.language),
+                options=['years', 'months'],
+                index=0 if st.session_state.get("age_unit_selector", "years") == 'years' else 1,
+                key="age_unit_selector"
+            )
+
     with col3:
         st.write("")  # Spacer
         calculate_button = st.button(
             get_translation("calculate", st.session_state.language),
             type="primary"
         )
-    
+
     # Convert weight to kg if needed
     weight_kg = weight if weight_unit == 'kg' else weight * 0.453592
-    
+
     # Convert age to years if needed
     age_years = age if age_unit == 'years' else age / 12
-    
+
     # Validation
     if weight_kg <= 0:
         st.error(get_translation("weight_error", st.session_state.language))
         return
-    
+
     if age < 0:
         st.error(get_translation("age_error", st.session_state.language))
         return
-    
+
     # Calculate dosages
     calculator = DosageCalculator(weight_kg, age_years)
-    
+
     if calculate_button or weight_kg > 0:
         st.markdown("---")
-        
+
         # Display patient info
         st.subheader(get_translation("patient_info", st.session_state.language))
         info_col1, info_col2 = st.columns(2)
@@ -132,9 +134,9 @@ def main():
                 get_translation("age", st.session_state.language),
                 age_display
             )
-        
+
         st.markdown("---")
-        
+
         # Display medication categories
         display_medication_category("airway_defib", calculator.get_airway_defib_medications())
         display_medication_category("intubation", calculator.get_intubation_medications())
@@ -149,14 +151,13 @@ def display_medication_category(category_key, medications):
     """Display a category of medications in a table format"""
     if not medications:
         return
-    
+
     st.subheader(get_translation(category_key, st.session_state.language))
-    
+
     # Check if this category has infusion medications that need rate selection
     if category_key in ['inotropes', 'sedation', 'antihypertensives', 'antiarrhythmics', 'others']:
         display_infusion_medications(medications)
     elif category_key == 'airway_defib':
-        # Display airway & defib without column headers
         for med in medications:
             col1, col2 = st.columns([1, 2])
             with col1:
@@ -165,7 +166,6 @@ def display_medication_category(category_key, medications):
                 st.write(f"{med['dosage']} - {med['route']}")
             st.markdown("---")
     else:
-        # Create DataFrame for regular medications
         df_data = []
         for med in medications:
             df_data.append({
@@ -173,42 +173,38 @@ def display_medication_category(category_key, medications):
                 get_translation("dosage", st.session_state.language): med['dosage'],
                 get_translation("route", st.session_state.language): med['route']
             })
-        
+
         df = pd.DataFrame(df_data)
-        
-        # Use column configuration to control width
+
         column_config = {
             get_translation("medication", st.session_state.language): st.column_config.TextColumn(width="medium"),
             get_translation("dosage", st.session_state.language): st.column_config.TextColumn(width="medium"),
             get_translation("route", st.session_state.language): st.column_config.TextColumn(width="large")
         }
-        
+
         st.dataframe(df, use_container_width=True, hide_index=True, column_config=column_config)
-    
+
     st.markdown("---")
 
 def display_infusion_medications(medications):
     """Display infusion medications with rate selection"""
     import re
-    
+
     for i, med in enumerate(medications):
         with st.container():
             col1, col2, col3 = st.columns([2, 2, 2])
-            
+
             with col1:
                 st.write(f"**{med['name']}**")
                 st.caption(f"Weight: {med['dosage']}")
-            
+
             with col2:
-                # Extract dose range for dropdown
                 if 'infusion' in med['route'].lower() or any(unit in med['route'] for unit in ['mcg/kg/min', 'mg/kg/h', 'units/kg/h']):
-                    # Parse the dose range from route
                     match = re.search(r'(\d+\.?\d*)-(\d+\.?\d*)', med['route'])
                     if match:
                         min_dose = float(match.group(1))
                         max_dose = float(match.group(2))
-                        
-                        # Create dropdown options based on range
+
                         if max_dose < 1:
                             step = 0.01
                             options = [round(min_dose + i * step, 2) for i in range(int((max_dose - min_dose) / step) + 1)]
@@ -218,26 +214,23 @@ def display_infusion_medications(medications):
                         else:
                             step = 1.0
                             options = [int(min_dose + i * step) for i in range(int((max_dose - min_dose) / step) + 1)]
-                        
-                        # Limit options to reasonable number
+
                         if len(options) > 20:
-                            options = options[::len(options)//15]  # Take every nth option to get ~15 options
-                        
+                            options = options[::len(options)//15]
+
                         selected_dose = st.selectbox(
                             "Select rate:",
                             options=options,
-                            index=len(options)//2,  # Default to middle value
+                            index=len(options)//2,
                             key=f"dose_{i}_{med['name']}"
                         )
-                        
-                        # Extract unit from route
+
                         unit_match = re.search(r'(mcg/kg/min|mg/kg/h|units/kg/h)', med['route'])
                         unit = unit_match.group(1) if unit_match else "units"
-                        
+
                         with col3:
-                            # Calculate actual dosage based on selected rate and weight
-                            weight_kg = float(med['dosage'].split()[0])  # Extract weight from dosage string
-                            
+                            weight_kg = float(med['dosage'].split()[0])
+
                             if 'mcg/kg/min' in unit:
                                 actual_dose = selected_dose * weight_kg
                                 st.metric("Actual Dose", f"{actual_dose:.1f} mcg/min")
@@ -253,8 +246,7 @@ def display_infusion_medications(medications):
                         st.write(med['route'])
                 else:
                     st.write(med['route'])
-            
-            st.markdown("---")
 
+# Run the app
 if __name__ == "__main__":
     main()
