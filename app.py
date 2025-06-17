@@ -180,12 +180,31 @@ def display_medication_category(category_key, medications):
 def display_infusion_medications(medications):
     """Display infusion medications with rate selection and additional dosage info"""
     import re
-    
-    for i, med in enumerate(medications):
+
+    updated_meds = []
+    for med in medications:
+        updated_meds.append(med)
+        if med['name'].lower() == "adrenaline":
+            weight_val = float(med['dosage'].split()[0])
+            updated_meds.extend([
+                {
+                    'name': 'Adrenaline (Low Concentration)',
+                    'dosage': f"{weight_val} kg",
+                    'route': '0.05-0.5 mcg/kg/min',
+                    'volume': 20
+                },
+                {
+                    'name': 'Adrenaline (High Concentration)',
+                    'dosage': f"{weight_val} kg",
+                    'route': '0.5-1 mcg/kg/min',
+                    'volume': 20
+                }
+            ])
+
+    for i, med in enumerate(updated_meds):
         with st.container():
             col1, col2, col3 = st.columns([2, 2, 2])
 
-            # Medication name and base dosage info
             with col1:
                 st.write(f"**{med['name']}**")
                 st.caption(f"Weight: {med['dosage']}")
@@ -212,9 +231,8 @@ def display_infusion_medications(medications):
                         options = [int(min_dose + i * step) for i in range(int((max_dose - min_dose) / step) + 1)]
 
                     if len(options) > 20:
-                        options = options[::len(options)//15]
+                        options = options[::len(options)//15 or 1]
 
-                    # Show dosage range
                     st.write(f"Range: {options[0]} – {options[-1]} {unit}")
 
                     selected_dose = st.selectbox(
@@ -224,31 +242,39 @@ def display_infusion_medications(medications):
                         key=f"dose_{i}_{med['name']}"
                     )
 
-                    with col3:
-                        weight_kg = float(med['dosage'].split()[0])
-                        total_dose = selected_dose * weight_kg  # Total per min or hour depending on unit
-
-                        # Convert to ml/h assuming total volume is 50 mL
-                        if 'mcg/kg/min' in unit:
-                            # Convert mcg/min → total mcg/h → mg/h
-                            dose_per_hour_mcg = total_dose * 60
-                            dose_per_hour_mg = dose_per_hour_mcg / 1000
-                        elif 'mg/kg/h' in unit:
-                            dose_per_hour_mg = total_dose
-                        elif 'units/kg/h' in unit:
-                            dose_per_hour_mg = total_dose  # For units just treat it as units
-                        else:
-                            dose_per_hour_mg = None
-
-                        if dose_per_hour_mg is not None:
-                            ml_per_hour = 50  # Assume drug is in 50 ml NS
-                            concentration = dose_per_hour_mg / 50  # mg per ml
-                            st.metric("Infusion Rate", f"{ml_per_hour:.1f} mL/h")
-                            st.caption(f"Add **{dose_per_hour_mg:.2f} mg** to 50 mL NS")
-                        else:
-                            st.write("Unsupported unit")
                 else:
-                    st.write(route)
+                    # No range: use fixed rate or skip dosage parsing
+                    selected_dose = st.selectbox(
+                        "Select rate:",
+                        options=[1],  # Dummy default value
+                        index=0,
+                        key=f"dose_{i}_{med['name']}_fallback"
+                    )
+                    unit = 'mcg/kg/min'  # Safe default
+                    st.caption("Single rate or no defined range.")
+
+                with col3:
+                    weight_kg = float(med['dosage'].split()[0])
+                    total_dose = selected_dose * weight_kg
+
+                    # Determine volume to use
+                    volume = med.get('volume', 50)
+
+                    if 'mcg/kg/min' in unit:
+                        dose_per_hour_mcg = total_dose * 60
+                        dose_per_hour_mg = dose_per_hour_mcg / 1000
+                    elif 'mg/kg/h' in unit:
+                        dose_per_hour_mg = total_dose
+                    elif 'units/kg/h' in unit:
+                        dose_per_hour_mg = total_dose
+                    else:
+                        dose_per_hour_mg = None
+
+                    if dose_per_hour_mg is not None:
+                        st.metric("Infusion Rate", f"{volume:.1f} mL/h")
+                        st.caption(f"Add **{dose_per_hour_mg:.2f} mg** to {volume} mL NS")
+                    else:
+                        st.write("Unsupported unit")
 
 
 # Run the app
